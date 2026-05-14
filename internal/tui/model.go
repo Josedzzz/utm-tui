@@ -9,6 +9,8 @@ type sessionState int
 const (
 	menuView sessionState = iota
 	listVMsView
+	deleteConfirmView
+	cloneInputView
 )
 
 // Model holds the entire TUI state
@@ -27,6 +29,11 @@ type Model struct {
 	vmsCursor int
 	vmsOffset int
 	loading   bool
+
+	// Action-specific fields
+	selectedVM  *utm.VM // VM selected for delete or clone
+	inputText   string  // Text input for clone name
+	inputCursor int     // Cursor position in input
 }
 
 // NewModel creates and returns a new model with default values

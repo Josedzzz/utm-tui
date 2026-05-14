@@ -49,10 +49,6 @@ var (
 			MarginTop(1).
 			Italic(true)
 
-	headerStyle = lipgloss.NewStyle().
-			Foreground(primaryColor).
-			Bold(true)
-
 	processingStyle = lipgloss.NewStyle().
 			Foreground(secondaryColor).
 			Italic(true)
@@ -73,6 +69,12 @@ var (
 	errorStyle = lipgloss.NewStyle().
 			Foreground(redColor).
 			Bold(true)
+
+	inputStyle = lipgloss.NewStyle().
+			Foreground(primaryColor).
+			Bold(true).
+			Border(lipgloss.RoundedBorder()).
+			Padding(0, 1)
 
 	// VM list specific
 	vmStatusStyle = map[string]lipgloss.Style{

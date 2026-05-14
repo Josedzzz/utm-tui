@@ -39,3 +39,23 @@ func ListVMs() ([]VM, error) {
 	}
 	return vms, nil
 }
+
+// CloneVM clones an existing virtual machine with a new name
+func CloneVM(uuid, newName string) error {
+	cmd := exec.Command("utmctl", "clone", uuid, "--name", newName)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to clone VM: %w", err)
+	}
+	return nil
+}
+
+// DeleteVM deletes a virtual machine by UUID
+func DeleteVM(uuid string) error {
+	cmd := exec.Command("utmctl", "delete", uuid)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to delete VM: %w", err)
+	}
+	return nil
+}
