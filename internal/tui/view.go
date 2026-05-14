@@ -33,6 +33,13 @@ type actionCompleteMsg struct {
 	message string
 }
 
+// statusUpdateMsg indicates a status update for a VM
+type statusUpdateMsg struct {
+	status  string
+	message string
+	err     error
+}
+
 // Init initializes the model
 func (m Model) Init() tea.Cmd {
 	return nil
@@ -60,6 +67,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleDeleteConfirmUpdate(msg)
 		case cloneInputView:
 			return m.handleCloneInputUpdate(msg)
+		case vmDetailsView:
+			return m.handleVMDetailsUpdate(msg)
 		}
 
 	case vmsLoadedMsg:
@@ -83,6 +92,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = listVMsView
 			m.loading = true
 			return m, fetchVMsCmd
+		}
+		return m, nil
+
+	case statusUpdateMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.message = fmt.Sprintf("Status check failed: %v", msg.err)
+			m.isSuccess = false
+		} else {
+			m.message = fmt.Sprintf("Status: %s", msg.status)
+			m.isSuccess = true
+			if m.selectedVM != nil {
+				m.selectedVM.Status = msg.status
+			}
 		}
 		return m, nil
 	}
@@ -132,6 +155,42 @@ func (m Model) handleCloneInputUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(msg.String()) == 1 {
 			m.inputText = m.inputText[:m.inputCursor] + msg.String() + m.inputText[m.inputCursor:]
 			m.inputCursor++
+		}
+	}
+	return m, nil
+}
+
+// handleVMDetailsUpdate processes keys in the VM details view
+func (m Model) handleVMDetailsUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Go back to VM list
+		m.state = listVMsView
+		m.selectedVM = nil
+		return m, nil
+	case "s":
+		// Start VM
+		if m.selectedVM != nil {
+			m.loading = true
+			return m, startVMCmd(m.selectedVM.UUID)
+		}
+	case "x":
+		// Stop VM
+		if m.selectedVM != nil {
+			m.loading = true
+			return m, stopVMCmd(m.selectedVM.UUID)
+		}
+	case "p":
+		// Suspend (pause) VM
+		if m.selectedVM != nil {
+			m.loading = true
+			return m, suspendVMCmd(m.selectedVM.UUID)
+		}
+	case "r":
+		// Refresh status
+		if m.selectedVM != nil {
+			m.loading = true
+			return m, getStatusCmd(m.selectedVM.UUID)
 		}
 	}
 	return m, nil
@@ -201,6 +260,13 @@ func (m Model) handleListVMsUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.inputCursor = 0
 			m.message = ""
 		}
+	case "enter", "e":
+		// Enter VM details view
+		if len(m.vms) > 0 {
+			m.selectedVM = &m.vms[m.vmsCursor]
+			m.state = vmDetailsView
+			m.message = ""
+		}
 	}
 	return m, nil
 }
@@ -233,6 +299,50 @@ func cloneVMCmd(uuid, newName string) tea.Cmd {
 			return actionCompleteMsg{success: false, message: fmt.Sprintf("Clone failed: %v", err)}
 		}
 		return actionCompleteMsg{success: true, message: fmt.Sprintf("VM cloned as '%s'", newName)}
+	}
+}
+
+// startVMCmd executes the start VM command
+func startVMCmd(uuid string) tea.Cmd {
+	return func() tea.Msg {
+		err := utm.StartVM(uuid)
+		if err != nil {
+			return actionCompleteMsg{success: false, message: fmt.Sprintf("Start failed: %v", err)}
+		}
+		return actionCompleteMsg{success: true, message: "VM started successfully"}
+	}
+}
+
+// stopVMCmd executes the stop VM command
+func stopVMCmd(uuid string) tea.Cmd {
+	return func() tea.Msg {
+		err := utm.StopVM(uuid)
+		if err != nil {
+			return actionCompleteMsg{success: false, message: fmt.Sprintf("Stop failed: %v", err)}
+		}
+		return actionCompleteMsg{success: true, message: "VM stopped successfully"}
+	}
+}
+
+// suspendVMCmd executes the suspend VM command
+func suspendVMCmd(uuid string) tea.Cmd {
+	return func() tea.Msg {
+		err := utm.SuspendVM(uuid)
+		if err != nil {
+			return actionCompleteMsg{success: false, message: fmt.Sprintf("Suspend failed: %v", err)}
+		}
+		return actionCompleteMsg{success: true, message: "VM suspended successfully"}
+	}
+}
+
+// getStatusCmd retrieves the status of a VM
+func getStatusCmd(uuid string) tea.Cmd {
+	return func() tea.Msg {
+		status, err := utm.GetVMStatus(uuid)
+		if err != nil {
+			return statusUpdateMsg{err: err}
+		}
+		return statusUpdateMsg{status: status, message: "Status retrieved"}
 	}
 }
 
@@ -308,7 +418,7 @@ func (m Model) View() string {
 				fmt.Fprintf(&body, "\n%s", style.Render(m.message))
 			}
 
-			body.WriteString(footerStyle.Render("\n\n↑/↓: scroll • c: clone • d: delete • esc: back to menu"))
+			body.WriteString(footerStyle.Render("\n\n↑/↓: scroll • enter: details • c: clone • d: delete • esc: back to menu"))
 		case deleteConfirmView:
 			body.WriteString(titleStyle.Render(" DELETE VM ") + "\n\n")
 			if m.selectedVM != nil {
@@ -324,6 +434,32 @@ func (m Model) View() string {
 				fmt.Fprintf(&body, "%s\n\n", inputStyle.Render(m.inputText+"_"))
 				fmt.Fprintf(&body, "Press Enter to clone or Esc to cancel\n")
 			}
+		case vmDetailsView:
+			if m.selectedVM != nil {
+				body.WriteString(titleStyle.Render(" VM DETAILS ") + "\n\n")
+				fmt.Fprintf(&body, "Name:   %s\n", selectedItemStyle.Render(m.selectedVM.Name))
+				fmt.Fprintf(&body, "UUID:   %s\n", m.selectedVM.UUID)
+				fmt.Fprintf(&body, "Status: %s\n\n", m.selectedVM.Status)
+
+				if m.loading {
+					body.WriteString(processingStyle.Render("Processing action... Please wait.") + "\n")
+				} else {
+					body.WriteString("Actions:\n")
+					body.WriteString("  s - Start VM\n")
+					body.WriteString("  x - Stop VM\n")
+					body.WriteString("  p - Suspend VM\n")
+					body.WriteString("  r - Refresh Status\n\n")
+				}
+
+				if m.message != "" {
+					style := errorStyle
+					if m.isSuccess {
+						style = successStyle
+					}
+					fmt.Fprintf(&body, "%s\n", style.Render(m.message))
+				}
+			}
+			body.WriteString(footerStyle.Render("\n\nEsc: back to list"))
 		}
 	}
 

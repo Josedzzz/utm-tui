@@ -11,6 +11,7 @@ const (
 	listVMsView
 	deleteConfirmView
 	cloneInputView
+	vmDetailsView
 )
 
 // Model holds the entire TUI state

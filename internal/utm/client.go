@@ -59,3 +59,43 @@ func DeleteVM(uuid string) error {
 	}
 	return nil
 }
+
+// StartVM starts a virtual machine
+func StartVM(uuid string) error {
+	cmd := exec.Command("utmctl", "start", uuid)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to start VM: %w", err)
+	}
+	return nil
+}
+
+// StopVM stops a running virtual machine
+func StopVM(uuid string) error {
+	cmd := exec.Command("utmctl", "stop", uuid)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to stop VM: %w", err)
+	}
+	return nil
+}
+
+// SuspendVM suspends a running virtual machine
+func SuspendVM(uuid string) error {
+	cmd := exec.Command("utmctl", "suspend", uuid)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to suspend VM: %w", err)
+	}
+	return nil
+}
+
+// GetVMStatus retrieves the current status of a virtual machine
+func GetVMStatus(uuid string) (string, error) {
+	cmd := exec.Command("utmctl", "status", uuid)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get VM status: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
